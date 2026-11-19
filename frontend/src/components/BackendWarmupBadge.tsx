@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { fetchHealth } from "@/lib/api";
+import { API_BASE_URL, fetchHealth } from "@/lib/api";
 import type { HealthResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -21,7 +21,8 @@ export function BackendWarmupBadge() {
       setState("warming");
     }
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    // Allow generous timeout for free-tier cloud cold starts (Render can take 50-60s)
+    const timeout = setTimeout(() => controller.abort(), 25000);
 
     try {
       const data = await fetchHealth(controller.signal);
@@ -32,18 +33,18 @@ export function BackendWarmupBadge() {
         retryCountRef.current = 0;
       } else {
         setState("warming");
-        if (retryCountRef.current < 6) {
+        if (retryCountRef.current < 8) {
           retryCountRef.current += 1;
           timerRef.current = setTimeout(() => checkHealth(true), 3000);
         }
       }
     } catch {
       clearTimeout(timeout);
-      if (retryCountRef.current < 2) {
-        // Initial cold start grace period before declaring offline
+      if (retryCountRef.current < 4) {
+        // Up to ~115s total grace period for free-tier container cold starts
         retryCountRef.current += 1;
         setState("warming");
-        timerRef.current = setTimeout(() => checkHealth(true), 2500);
+        timerRef.current = setTimeout(() => checkHealth(true), 3000);
       } else {
         setState("offline");
       }
@@ -200,8 +201,8 @@ export function BackendWarmupBadge() {
           ) : (
             <p className="font-body text-body-sm text-on-surface-variant">
               {state === "warming"
-                ? "Connecting to FastAPI speech analysis backend..."
-                : "Could not reach backend API. Ensure FastAPI is running on port 8000."}
+                ? "Waking up speech engine (free-tier cold starts can take 30–60s after idle)..."
+                : `Could not reach speech engine at ${API_BASE_URL}. Click Recheck to retry.`}
             </p>
           )}
         </div>
