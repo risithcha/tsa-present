@@ -3,24 +3,30 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
+  BarChart3,
+  CheckCircle2,
   Mic,
   Pause,
   Play,
   RotateCcw,
-  Sparkles,
   Square,
-  Volume2,
 } from "lucide-react";
 import { cn, formatTime } from "@/lib/utils";
 
-type RecorderStatus = "idle" | "recording" | "paused" | "recorded";
-type MicLevelStatus = "quiet" | "good" | "loud";
+export type RecorderStatus = "idle" | "recording" | "paused" | "recorded";
+export type MicLevelStatus = "quiet" | "good" | "loud";
 
 interface AudioRecorderProps {
   disabled?: boolean;
   onAnalyze: (blob: Blob, filename: string, mimeType: string) => void;
   onRecordingStateChange?: (isActive: boolean, elapsedSec: number) => void;
+  onMicStatusChange?: (status: RecorderStatus, micLevel: MicLevelStatus) => void;
 }
+
+const IDLE_BAR_HEIGHTS = [
+  20, 32, 48, 64, 80, 56, 36, 24, 56, 80, 64, 44, 28, 64, 80, 48, 32, 40, 64,
+  56, 28, 20, 48, 64, 56, 36, 24, 48,
+];
 
 function getSupportedMimeType(): string | undefined {
   if (typeof MediaRecorder === "undefined") return undefined;
@@ -45,10 +51,33 @@ function getExtensionFromMime(mime: string): string {
   return "webm";
 }
 
+function fillRoundedPill(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+) {
+  const radius = Math.min(width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+  ctx.fill();
+}
+
 export function AudioRecorder({
   disabled = false,
   onAnalyze,
   onRecordingStateChange,
+  onMicStatusChange,
 }: AudioRecorderProps) {
   const [status, setStatus] = useState<RecorderStatus>("idle");
   const [elapsedSec, setElapsedSec] = useState(0);
@@ -58,7 +87,12 @@ export function AudioRecorder({
   const [recordedMime, setRecordedMime] = useState<string>("audio/webm");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
+  const [previewPlaying, setPreviewPlaying] = useState(false);
+  const [previewCurrentSec, setPreviewCurrentSec] = useState(0);
+  const [previewDurationSec, setPreviewDurationSec] = useState(0);
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -67,6 +101,14 @@ export function AudioRecorder({
   const chunksRef = useRef<BlobPart[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedRef = useRef(0);
+  const statusRef = useRef<RecorderStatus>("idle");
+  const lastMicLevelRef = useRef<MicLevelStatus>("good");
+  const smoothedBarsRef = useRef<number[]>(new Array(32).fill(0.12));
+
+  useEffect(() => {
+    statusRef.current = status;
+    onMicStatusChange?.(status, micLevel);
+  }, [status, micLevel, onMicStatusChange]);
 
   const stopVisualizationAndStream = useCallback(() => {
     if (rafRef.current !== null) {
@@ -102,7 +144,7 @@ export function AudioRecorder({
     onRecordingStateChange?.(isActive, elapsedSec);
   }, [status, elapsedSec, onRecordingStateChange]);
 
-  const drawWaveform = useCallback(() => {
+  const drawBarMeter = useCallback(() => {
     const canvas = canvasRef.current;
     const analyser = analyserRef.current;
     if (!canvas || !analyser) return;
@@ -110,34 +152,40 @@ export function AudioRecorder({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const bufferLength = analyser.fftSize;
-    const dataArray = new Uint8Array(bufferLength);
+    const timeData = new Uint8Array(analyser.fftSize);
+    const freqData = new Uint8Array(analyser.frequencyBinCount);
+    const barCount = 32;
 
     const renderFrame = () => {
       if (!analyserRef.current) return;
       rafRef.current = requestAnimationFrame(renderFrame);
 
-      analyserRef.current.getByteTimeDomainData(dataArray);
+      const isPaused = statusRef.current === "paused";
 
-      // Compute RMS level (0..1)
-      let sumSquares = 0;
-      for (let i = 0; i < bufferLength; i += 1) {
-        const normalized = (dataArray[i] - 128) / 128;
-        sumSquares += normalized * normalized;
-      }
-      const rms = Math.sqrt(sumSquares / bufferLength);
+      if (!isPaused) {
+        analyserRef.current.getByteTimeDomainData(timeData);
+        analyserRef.current.getByteFrequencyData(freqData);
 
-      if (rms < 0.015) {
-        setMicLevel("quiet");
-      } else if (rms > 0.38) {
-        setMicLevel("loud");
-      } else {
-        setMicLevel("good");
+        let sumSquares = 0;
+        for (let i = 0; i < timeData.length; i += 1) {
+          const normalized = (timeData[i] - 128) / 128;
+          sumSquares += normalized * normalized;
+        }
+        const rms = Math.sqrt(sumSquares / timeData.length);
+
+        const nextLevel: MicLevelStatus =
+          rms < 0.015 ? "quiet" : rms > 0.38 ? "loud" : "good";
+        if (nextLevel !== lastMicLevelRef.current) {
+          lastMicLevelRef.current = nextLevel;
+          setMicLevel(nextLevel);
+        }
       }
 
       const dpr = window.devicePixelRatio || 1;
       const width = canvas.clientWidth;
       const height = canvas.clientHeight;
+      if (width === 0 || height === 0) return;
+
       if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
         canvas.width = width * dpr;
         canvas.height = height * dpr;
@@ -147,38 +195,45 @@ export function AudioRecorder({
       ctx.scale(dpr, dpr);
       ctx.clearRect(0, 0, width, height);
 
-      // Center baseline
-      ctx.strokeStyle = "rgba(148, 163, 184, 0.16)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(0, height / 2);
-      ctx.lineTo(width, height / 2);
-      ctx.stroke();
+      const step = width / barCount;
+      const barWidth = Math.max(4, Math.min(7, step * 0.48));
+      const maxBarHeight = Math.max(24, height - 24);
+      const minBarHeight = 10;
 
-      // Gradient waveform
-      const grad = ctx.createLinearGradient(0, 0, width, 0);
-      grad.addColorStop(0, "#6366f1");
-      grad.addColorStop(0.5, "#06b6d4");
-      grad.addColorStop(1, "#818cf8");
+      // Vocal frequency bins (roughly 90 Hz to 3.4 kHz)
+      const startBin = 2;
+      const usableBins = Math.min(freqData.length - startBin, 64);
 
-      ctx.lineWidth = 2.5;
-      ctx.strokeStyle = grad;
-      ctx.beginPath();
-
-      const sliceWidth = width / bufferLength;
-      let x = 0;
-      for (let i = 0; i < bufferLength; i += 2) {
-        const v = dataArray[i] / 128.0;
-        const y = (v * height) / 2;
-        if (i === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
+      for (let i = 0; i < barCount; i += 1) {
+        let target = 0.08;
+        if (!isPaused) {
+          const binIdx =
+            startBin + Math.floor((i / barCount) * Math.max(1, usableBins));
+          const energy = (freqData[binIdx] || 0) / 255;
+          // Gentle boost for speech dynamics while staying bounded 0..1
+          target = Math.min(1, Math.max(0.08, Math.pow(energy, 0.85) * 1.15));
         }
-        x += sliceWidth * 2;
+
+        const prev = smoothedBarsRef.current[i] ?? 0.08;
+        const next = prev + (target - prev) * (target > prev ? 0.42 : 0.18);
+        smoothedBarsRef.current[i] = next;
+
+        const barHeight =
+          minBarHeight + next * (maxBarHeight - minBarHeight);
+        const x = i * step + (step - barWidth) / 2;
+        const y = (height - barHeight) / 2;
+
+        if (isPaused || next < 0.14) {
+          ctx.fillStyle = "#C4C5D7";
+        } else if (next > 0.68) {
+          ctx.fillStyle = "#004E48"; // Deep teal accent on strong speech peaks
+        } else {
+          ctx.fillStyle = "#0037B0"; // Cobalt primary active bars
+        }
+
+        fillRoundedPill(ctx, x, y, barWidth, barHeight);
       }
-      ctx.lineTo(width, height / 2);
-      ctx.stroke();
+
       ctx.restore();
     };
 
@@ -223,8 +278,8 @@ export function AudioRecorder({
       audioCtxRef.current = audioCtx;
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 2048;
-      analyser.smoothingTimeConstant = 0.85;
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.82;
       source.connect(analyser);
       analyserRef.current = analyser;
 
@@ -248,6 +303,9 @@ export function AudioRecorder({
         setRecordedBlob(blob);
         setRecordedMime(finalMime);
         setPreviewUrl(url);
+        setPreviewPlaying(false);
+        setPreviewCurrentSec(0);
+        setPreviewDurationSec(elapsedRef.current);
         setStatus("recorded");
         stopVisualizationAndStream();
       };
@@ -258,9 +316,12 @@ export function AudioRecorder({
       elapsedRef.current = 0;
       setElapsedSec(0);
       setRecordedBlob(null);
+      lastMicLevelRef.current = "good";
+      setMicLevel("good");
+      smoothedBarsRef.current = new Array(32).fill(0.1);
       setStatus("recording");
       startElapsedClock();
-      drawWaveform();
+      requestAnimationFrame(() => drawBarMeter());
     } catch (err) {
       stopVisualizationAndStream();
       const message =
@@ -297,10 +358,16 @@ export function AudioRecorder({
   };
 
   const handleReset = () => {
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+    }
     stopVisualizationAndStream();
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
     setRecordedBlob(null);
+    setPreviewPlaying(false);
+    setPreviewCurrentSec(0);
+    setPreviewDurationSec(0);
     setElapsedSec(0);
     elapsedRef.current = 0;
     setError(null);
@@ -313,169 +380,255 @@ export function AudioRecorder({
     onAnalyze(recordedBlob, `presentation-take.${ext}`, recordedMime);
   };
 
+  const togglePreviewPlayback = () => {
+    const audio = previewAudioRef.current;
+    if (!audio) return;
+    if (audio.paused) {
+      void audio.play();
+    } else {
+      audio.pause();
+    }
+  };
+
+  const effectiveDuration =
+    Number.isFinite(previewDurationSec) && previewDurationSec > 0
+      ? previewDurationSec
+      : elapsedSec;
+
+  const handlePreviewSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    const audio = previewAudioRef.current;
+    if (!audio || effectiveDuration <= 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    audio.currentTime = ratio * effectiveDuration;
+    setPreviewCurrentSec(audio.currentTime);
+  };
+
+  const previewProgressPct =
+    effectiveDuration > 0
+      ? Math.min(100, (previewCurrentSec / effectiveDuration) * 100)
+      : 0;
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-gutter-md">
       {error && (
-        <div className="flex items-start gap-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-200">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
+        <div
+          role="alert"
+          className="flex items-start gap-2.5 rounded-md border border-error/30 bg-error-container/70 p-3 text-body-sm text-on-error-container"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-error" aria-hidden="true" />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Waveform / studio meter stage */}
-      <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-slate-950/75 p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span
-              className={cn(
-                "h-2.5 w-2.5 rounded-full",
-                status === "recording" && "animate-pulse bg-rose-500",
-                status === "paused" && "bg-amber-400",
-                status === "recorded" && "bg-emerald-400",
-                status === "idle" && "bg-slate-600"
-              )}
-            />
-            <span className="text-xs font-medium text-slate-300">
-              {status === "idle" && "Microphone Ready"}
-              {status === "recording" && "Recording Live"}
-              {status === "paused" && "Recording Paused"}
-              {status === "recorded" && "Take Captured"}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {(status === "recording" || status === "paused") && (
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium",
-                  micLevel === "good" &&
-                    "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-                  micLevel === "quiet" &&
-                    "border-amber-500/30 bg-amber-500/10 text-amber-300",
-                  micLevel === "loud" &&
-                    "border-rose-500/30 bg-rose-500/10 text-rose-300"
-                )}
-              >
-                <Volume2 className="h-3 w-3" />
-                {micLevel === "good" && "Good level"}
-                {micLevel === "quiet" && "Too quiet — move closer"}
-                {micLevel === "loud" && "Loud — back up slightly"}
-              </span>
-            )}
-            <span className="font-mono text-sm font-semibold text-slate-200 tabular-nums">
-              {formatTime(elapsedSec)}
-            </span>
-          </div>
-        </div>
-
-        <div className="relative h-28 w-full overflow-hidden rounded-xl border border-white/[0.05] bg-slate-900/50">
-          {status === "recording" || status === "paused" ? (
-            <canvas ref={canvasRef} className="h-full w-full" />
-          ) : status === "recorded" && previewUrl ? (
-            <div className="flex h-full flex-col items-center justify-center gap-2 px-4">
-              <audio
-                src={previewUrl}
-                controls
-                className="w-full max-w-md accent-cyan-400"
-              />
-              <span className="text-[11px] text-slate-400">
-                Preview your take •{" "}
+      {/* Recessed #EFF4FF Waveform / Bar Meter Well */}
+      <div
+        aria-label="Live microphone waveform"
+        className="relative flex h-28 items-center justify-between gap-1 overflow-hidden rounded-lg border border-outline-variant/50 bg-surface-container-low px-gutter-md"
+      >
+        {status === "recording" || status === "paused" ? (
+          <canvas
+            ref={canvasRef}
+            className="h-full w-full"
+            aria-label="Live microphone level meter"
+          />
+        ) : status === "recorded" ? (
+          <>
+            <div className="flex w-full items-center justify-between gap-1 opacity-45" aria-hidden="true">
+              {IDLE_BAR_HEIGHTS.map((h, idx) => (
+                <div
+                  key={idx}
+                  className={cn(
+                    "w-1.5 rounded-full",
+                    idx % 4 === 0 ? "bg-tertiary" : "bg-primary"
+                  )}
+                  style={{ height: `${h}px` }}
+                />
+              ))}
+            </div>
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant bg-surface-container-lowest/95 px-3.5 py-1.5 font-label text-label-md text-on-surface">
+                <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
+                Take captured
                 {recordedBlob
-                  ? `${(recordedBlob.size / (1024 * 1024)).toFixed(2)} MB`
+                  ? ` · ${(recordedBlob.size / (1024 * 1024)).toFixed(2)} MB`
                   : ""}
               </span>
             </div>
-          ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-1.5 text-center">
-              <Mic className="h-6 w-6 text-indigo-400/70" />
-              <p className="text-xs text-slate-400">
-                Press <span className="font-medium text-slate-200">Start Recording</span> to capture your speech & live waveform
-              </p>
+          </>
+        ) : (
+          <>
+            <div className="flex w-full items-center justify-between gap-1" aria-hidden="true">
+              {IDLE_BAR_HEIGHTS.map((h, idx) => (
+                <div
+                  key={idx}
+                  className="w-1.5 rounded-full bg-outline-variant"
+                  style={{ height: `${Math.max(14, Math.round(h * 0.55))}px` }}
+                />
+              ))}
             </div>
-          )}
-        </div>
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <span className="rounded-full border border-outline-variant/80 bg-surface-container-lowest/95 px-3.5 py-1 font-label text-label-sm text-on-surface-variant">
+                Press Start to capture live microphone audio
+              </span>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {status === "idle" && (
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={handleStart}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-cyan-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Mic className="h-4 w-4" />
-            Start Recording
-          </button>
-        )}
+      {/* Controls Row */}
+      <div className="flex flex-wrap items-center justify-between gap-gutter-sm">
+        <div className="flex flex-wrap items-center gap-gutter-sm">
+          {status === "idle" && (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={handleStart}
+              className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 font-label text-label-md text-on-primary transition-colors duration-[120ms] hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <Mic className="h-4 w-4" aria-hidden="true" />
+              <span>Start</span>
+            </button>
+          )}
 
-        {(status === "recording" || status === "paused") && (
-          <>
-            <div className="flex items-center gap-2">
+          {(status === "recording" || status === "paused") && (
+            <>
               {status === "recording" ? (
                 <button
                   type="button"
                   onClick={handlePause}
-                  className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:bg-white/10"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant bg-surface-container-low px-3.5 py-2 font-label text-label-md text-on-surface transition-colors duration-[120ms] hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
-                  <Pause className="h-4 w-4 text-amber-400" />
-                  Pause
+                  <Pause className="h-4 w-4" aria-hidden="true" />
+                  <span>Pause</span>
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={handleResume}
-                  className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-4 py-2.5 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/25"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 font-label text-label-md text-on-primary transition-colors duration-[120ms] hover:bg-primary-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
-                  <Play className="h-4 w-4" />
-                  Resume
+                  <Play className="h-4 w-4" aria-hidden="true" />
+                  <span>Resume</span>
                 </button>
               )}
 
               <button
                 type="button"
-                onClick={handleReset}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm font-medium text-slate-400 transition hover:bg-white/10 hover:text-slate-200"
+                onClick={handleStop}
+                className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant bg-surface-container-low px-3.5 py-2 font-label text-label-md text-error transition-colors duration-[120ms] hover:border-error/40 hover:bg-error-container/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
-                <RotateCcw className="h-4 w-4" />
-                Discard
+                <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                <span>Stop</span>
               </button>
-            </div>
 
-            <button
-              type="button"
-              onClick={handleStop}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-rose-600/25 transition hover:bg-rose-500 sm:flex-initial"
-            >
-              <Square className="h-3.5 w-3.5 fill-current" />
-              Stop & Review
-            </button>
-          </>
-        )}
+              <button
+                type="button"
+                onClick={handleReset}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 font-label text-label-md text-on-surface-variant transition-colors duration-[120ms] hover:bg-surface-container-low hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Discard</span>
+              </button>
+            </>
+          )}
 
-        {status === "recorded" && (
-          <>
+          {status === "recorded" && (
             <button
               type="button"
               disabled={disabled}
               onClick={handleReset}
-              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-white/10 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant bg-surface-container-low px-4 py-2 font-label text-label-md text-on-surface transition-colors duration-[120ms] hover:bg-surface-container disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
-              <RotateCcw className="h-4 w-4" />
-              Re-record
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+              <span>Re-record</span>
             </button>
+          )}
+        </div>
+
+        <span className="font-mono text-mono-sm text-on-surface-variant tabular-nums">
+          {formatTime(elapsedSec)}{" "}
+          {status === "recorded"
+            ? "captured"
+            : status === "idle"
+              ? "ready"
+              : "elapsed"}
+        </span>
+      </div>
+
+      {/* Audio Preview Playback */}
+      {status === "recorded" && previewUrl && (
+        <div className="flex items-center justify-between gap-gutter-md rounded-lg border border-outline-variant/60 bg-surface-container-low px-4 py-3">
+          <audio
+            ref={previewAudioRef}
+            src={previewUrl}
+            preload="metadata"
+            onLoadedMetadata={(e) => {
+              const dur = e.currentTarget.duration;
+              if (Number.isFinite(dur) && dur > 0) {
+                setPreviewDurationSec(dur);
+              }
+            }}
+            onTimeUpdate={(e) => {
+              setPreviewCurrentSec(e.currentTarget.currentTime);
+            }}
+            onPlay={() => setPreviewPlaying(true)}
+            onPause={() => setPreviewPlaying(false)}
+            onEnded={() => setPreviewPlaying(false)}
+            className="hidden"
+          />
+
+          <div className="flex items-center gap-gutter-sm">
             <button
               type="button"
-              disabled={disabled || !recordedBlob}
-              onClick={handleAnalyzeClick}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-cyan-500 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={togglePreviewPlayback}
+              aria-label={previewPlaying ? "Pause recorded preview" : "Play recorded preview"}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-outline-variant bg-surface-container-lowest text-primary transition-colors duration-[120ms] hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
-              <Sparkles className="h-4 w-4" />
-              Analyze Presentation
+              {previewPlaying ? (
+                <Pause className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <Play className="h-4 w-4 translate-x-0.5" aria-hidden="true" />
+              )}
             </button>
-          </>
-        )}
+            <span className="font-label text-label-md text-on-surface">
+              Take Preview
+            </span>
+          </div>
+
+          <div
+            role="slider"
+            tabIndex={0}
+            aria-label="Recorded take playback position"
+            aria-valuemin={0}
+            aria-valuemax={Math.round(effectiveDuration)}
+            aria-valuenow={Math.round(previewCurrentSec)}
+            onClick={handlePreviewSeek}
+            className="hidden h-1.5 flex-1 cursor-pointer overflow-hidden rounded-full bg-surface-container-highest sm:block"
+          >
+            <div
+              className="h-full rounded-full bg-primary transition-[width] duration-75"
+              style={{ width: `${previewProgressPct}%` }}
+            />
+          </div>
+
+          <span className="font-mono text-mono-sm text-on-surface-variant tabular-nums">
+            {formatTime(previewCurrentSec)} / {formatTime(effectiveDuration)}
+          </span>
+        </div>
+      )}
+
+      {/* Primary Action */}
+      <div className="flex items-center justify-end pt-gutter-sm">
+        <button
+          type="button"
+          disabled={disabled || !recordedBlob}
+          onClick={handleAnalyzeClick}
+          className="inline-flex w-full items-center justify-center gap-gutter-sm rounded-full bg-primary px-6 py-2.5 font-label text-label-lg text-on-primary transition-colors duration-[120ms] hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        >
+          <BarChart3 className="h-4 w-4" aria-hidden="true" />
+          <span>Analyze Presentation</span>
+        </button>
       </div>
     </div>
   );

@@ -4,12 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
-  Check,
+  CheckCircle2,
   Lock,
   Mic,
   RefreshCw,
-  ShieldCheck,
-  Sparkles,
   Upload,
 } from "lucide-react";
 import { analyzePresentation, fetchRubrics } from "@/lib/api";
@@ -17,7 +15,11 @@ import { saveSession } from "@/lib/db";
 import type { RubricSummary } from "@/lib/types";
 import { cn, formatTime } from "@/lib/utils";
 import { AnalyzingOverlay } from "@/components/AnalyzingOverlay";
-import { AudioRecorder } from "@/components/AudioRecorder";
+import {
+  AudioRecorder,
+  type MicLevelStatus,
+  type RecorderStatus,
+} from "@/components/AudioRecorder";
 import { AudioUploader } from "@/components/AudioUploader";
 import { NotesDrawer } from "@/components/NotesDrawer";
 import { PresentationTimer } from "@/components/PresentationTimer";
@@ -36,6 +38,8 @@ export default function PracticeStudioPage() {
   const [activeTab, setActiveTab] = useState<CaptureTab>("record");
   const [isRecordingActive, setIsRecordingActive] = useState(false);
   const [recordingElapsedSec, setRecordingElapsedSec] = useState(0);
+  const [recorderStatus, setRecorderStatus] = useState<RecorderStatus>("idle");
+  const [micLevel, setMicLevel] = useState<MicLevelStatus>("good");
   const [targetMinSec, setTargetMinSec] = useState<number | null>(180);
   const [targetMaxSec, setTargetMaxSec] = useState<number | null>(300);
 
@@ -102,6 +106,14 @@ export default function PracticeStudioPage() {
     []
   );
 
+  const handleMicStatusChange = useCallback(
+    (nextStatus: RecorderStatus, nextLevel: MicLevelStatus) => {
+      setRecorderStatus(nextStatus);
+      setMicLevel(nextLevel);
+    },
+    []
+  );
+
   const handleRangeChange = useCallback(
     (minSec: number | null, maxSec: number | null) => {
       setTargetMinSec(minSec);
@@ -109,6 +121,15 @@ export default function PracticeStudioPage() {
     },
     []
   );
+
+  const handleTabSwitch = (nextTab: CaptureTab) => {
+    setActiveTab(nextTab);
+    if (nextTab === "upload") {
+      setIsRecordingActive(false);
+      setRecordingElapsedSec(0);
+      setRecorderStatus("idle");
+    }
+  };
 
   const handleAnalyze = async (
     blob: Blob,
@@ -159,230 +180,128 @@ export default function PracticeStudioPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-gutter-xl">
       <AnalyzingOverlay visible={analyzing} />
 
-      {/* Studio Header */}
-      <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div>
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3 py-1 text-xs font-medium text-indigo-300">
-            <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
-            Practice Studio
-          </div>
-          <h1 className="mt-2.5 text-2xl font-bold tracking-tight text-white sm:text-3xl">
-            Rehearse. Record.{" "}
-            <span className="bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
-              Command the Room.
-            </span>
-          </h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-400">
-            Capture a live take or upload audio for instant acoustic pacing,
-            filler-word detection, and rubric-aligned AI coaching.
-          </p>
-        </div>
-
-        {/* Privacy pill */}
-        <div className="inline-flex items-center gap-2 self-start rounded-xl border border-emerald-500/20 bg-emerald-500/[0.07] px-3.5 py-2 text-xs text-emerald-200/90 sm:self-auto">
-          <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-400" />
-          <span>
-            Audio is analyzed ephemerally &amp; never stored on our servers; your
-            takes stay private in your browser.
+      {/* Flowy Editorial Session Setup */}
+      <section aria-label="Session setup" className="flex flex-col gap-gutter-md">
+        <label htmlFor="presentation-topic" className="flex flex-col gap-1">
+          <span className="font-label text-label-sm uppercase tracking-wider text-primary">
+            Practice Topic
           </span>
+          <input
+            id="presentation-topic"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Enter your presentation title or topic..."
+            className="w-full border-0 border-b border-outline-variant/50 bg-transparent px-0 py-1 font-headline text-headline-md text-on-surface placeholder:text-outline transition-colors duration-[120ms] hover:border-outline-variant focus:border-primary focus:outline-none focus:ring-0 sm:text-headline-lg"
+          />
+        </label>
+
+        <div className="flex flex-wrap items-center gap-gutter-sm">
+          <span className="mr-1 font-label text-label-md text-on-surface-variant">
+            Rubric:
+          </span>
+
+          {rubricsLoading ? (
+            <div className="flex flex-wrap items-center gap-gutter-sm">
+              <div className="h-8 w-52 animate-pulse rounded-full border border-outline-variant/50 bg-surface-container-low" />
+              <div className="h-8 w-60 animate-pulse rounded-full border border-outline-variant/50 bg-surface-container-low" />
+            </div>
+          ) : rubricsError ? (
+            <div className="flex flex-wrap items-center gap-gutter-sm">
+              <button
+                type="button"
+                aria-pressed="true"
+                className="inline-flex items-center gap-1.5 rounded-full border border-primary bg-surface-container-lowest px-3.5 py-1.5 font-label text-label-md text-primary"
+              >
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                <span>General Presentation Delivery</span>
+              </button>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-warning-container px-3 py-1 font-label text-label-sm text-on-warning-container">
+                Using default rubric ({rubricsError})
+              </span>
+              <button
+                type="button"
+                onClick={() => void loadRubrics()}
+                className="inline-flex items-center gap-1 rounded-full border border-outline-variant bg-surface-container-lowest px-3 py-1 font-label text-label-sm text-primary transition-colors duration-[120ms] hover:bg-surface-container-low"
+              >
+                <RefreshCw className="h-3 w-3" aria-hidden="true" />
+                <span>Retry</span>
+              </button>
+            </div>
+          ) : (
+            rubrics.map((rubric) => {
+              const isSelected = rubric.id === selectedRubricId;
+              const isDisabled = !rubric.enabled;
+              const targetWindow =
+                rubric.target_min_sec && rubric.target_max_sec
+                  ? ` (${formatTime(rubric.target_min_sec)}–${formatTime(rubric.target_max_sec)})`
+                  : "";
+
+              if (isDisabled) {
+                return (
+                  <button
+                    key={rubric.id}
+                    type="button"
+                    disabled
+                    aria-disabled="true"
+                    title={`${rubric.description} (Coming in Phase 2)`}
+                    className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-full bg-surface-container-low px-3.5 py-1.5 font-label text-label-md text-on-surface-variant opacity-80"
+                  >
+                    <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <span>{rubric.name} · Phase 2</span>
+                  </button>
+                );
+              }
+
+              return (
+                <button
+                  key={rubric.id}
+                  type="button"
+                  aria-pressed={isSelected}
+                  title={`${rubric.description} · ${rubric.criteria.length} criteria${targetWindow}`}
+                  onClick={() => setSelectedRubricId(rubric.id)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 font-label text-label-md transition-colors duration-[120ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    isSelected
+                      ? "border-primary bg-surface-container-lowest text-primary"
+                      : "border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface"
+                  )}
+                >
+                  {isSelected && (
+                    <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  )}
+                  <span>{rubric.name}</span>
+                </button>
+              );
+            })
+          )}
         </div>
       </section>
 
       {analyzeError && (
-        <div className="flex items-start gap-3 rounded-2xl border border-rose-500/35 bg-rose-500/10 p-4 text-sm text-rose-200">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-400" />
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-lg border border-error/30 bg-error-container/70 p-4 text-body-sm text-on-error-container"
+        >
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-error" aria-hidden="true" />
           <div>
-            <p className="font-semibold text-rose-100">Analysis Error</p>
-            <p className="mt-0.5 text-xs text-rose-200/90">{analyzeError}</p>
+            <p className="font-label text-label-md text-on-error-container">
+              Analysis Error
+            </p>
+            <p className="mt-0.5 text-body-sm text-on-error-container/90">
+              {analyzeError}
+            </p>
           </div>
         </div>
       )}
 
-      {/* Main Studio Grid */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left/Main Studio Console */}
-        <div className="space-y-6 lg:col-span-7 xl:col-span-8">
-          {/* Session Setup Card */}
-          <div className="rounded-2xl border border-white/[0.08] bg-slate-900/60 p-5 backdrop-blur-xl sm:p-6">
-            <div className="space-y-5">
-              <div>
-                <label
-                  htmlFor="presentation-topic"
-                  className="block text-xs font-semibold uppercase tracking-wider text-slate-400"
-                >
-                  Presentation Title or Topic
-                </label>
-                <input
-                  id="presentation-topic"
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g., TSA Engineering Design — Autonomous Solar Drone Pitch"
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/75 px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400/60 focus:outline-none focus:ring-2 focus:ring-cyan-400/15"
-                />
-              </div>
-
-              {/* Rubric Selector */}
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    Evaluation Rubric
-                  </span>
-                  {rubricsError && (
-                    <button
-                      type="button"
-                      onClick={() => void loadRubrics()}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-cyan-400 hover:text-cyan-300"
-                    >
-                      <RefreshCw className="h-3 w-3" />
-                      Retry
-                    </button>
-                  )}
-                </div>
-
-                {rubricsLoading ? (
-                  <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {[1, 2].map((skeleton) => (
-                      <div
-                        key={skeleton}
-                        className="h-24 animate-pulse rounded-xl border border-white/5 bg-white/[0.03]"
-                      />
-                    ))}
-                  </div>
-                ) : rubricsError ? (
-                  <div className="mt-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3.5 text-xs text-amber-200">
-                    <p className="font-medium">
-                      Could not fetch rubrics ({rubricsError})
-                    </p>
-                    <p className="mt-1 text-amber-200/75">
-                      Using default <code className="font-mono">general_delivery_v1</code>{" "}
-                      rubric. Start the backend server and click Retry to load
-                      all rubrics.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {rubrics.map((rubric) => {
-                      const isSelected = rubric.id === selectedRubricId;
-                      const isDisabled = !rubric.enabled;
-                      return (
-                        <button
-                          key={rubric.id}
-                          type="button"
-                          disabled={isDisabled}
-                          onClick={() => {
-                            if (!isDisabled) setSelectedRubricId(rubric.id);
-                          }}
-                          className={cn(
-                            "relative flex flex-col justify-between rounded-xl border p-3.5 text-left transition-all",
-                            isSelected &&
-                              !isDisabled &&
-                              "border-indigo-400/60 bg-indigo-500/15 ring-1 ring-indigo-400/30",
-                            !isSelected &&
-                              !isDisabled &&
-                              "border-white/10 bg-slate-950/60 hover:border-white/20 hover:bg-slate-900/80",
-                            isDisabled &&
-                              "cursor-not-allowed border-white/[0.05] bg-slate-950/40 opacity-60"
-                          )}
-                        >
-                          <div>
-                            <div className="flex items-start justify-between gap-2">
-                              <span className="text-sm font-semibold text-white">
-                                {rubric.name}
-                              </span>
-                              {isDisabled ? (
-                                <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-700 bg-slate-800/90 px-2 py-0.5 text-[10px] font-medium text-slate-300">
-                                  <Lock className="h-2.5 w-2.5" />
-                                  Coming in Phase 2
-                                </span>
-                              ) : isSelected ? (
-                                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-500 text-white">
-                                  <Check className="h-3 w-3" />
-                                </span>
-                              ) : null}
-                            </div>
-                            <p className="mt-1 line-clamp-2 text-xs text-slate-400">
-                              {rubric.description}
-                            </p>
-                          </div>
-
-                          <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                            <span>{rubric.criteria.length} criteria</span>
-                            {rubric.target_min_sec && rubric.target_max_sec && (
-                              <span>
-                                • {formatTime(rubric.target_min_sec)}–
-                                {formatTime(rubric.target_max_sec)}
-                              </span>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Audio Capture / Upload Card */}
-          <div className="rounded-2xl border border-white/[0.08] bg-slate-900/60 p-5 backdrop-blur-xl sm:p-6">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-base font-semibold text-white">
-                  Audio Input
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Record directly in browser or drop an existing take
-                </p>
-              </div>
-
-              <div className="inline-flex rounded-xl border border-white/10 bg-slate-950/80 p-1">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("record")}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all",
-                    activeTab === "record"
-                      ? "bg-indigo-500/25 text-white ring-1 ring-indigo-400/40"
-                      : "text-slate-400 hover:text-slate-200"
-                  )}
-                >
-                  <Mic className="h-3.5 w-3.5" />
-                  Record Live
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("upload")}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all",
-                    activeTab === "upload"
-                      ? "bg-cyan-500/20 text-white ring-1 ring-cyan-400/40"
-                      : "text-slate-400 hover:text-slate-200"
-                  )}
-                >
-                  <Upload className="h-3.5 w-3.5" />
-                  Upload Audio
-                </button>
-              </div>
-            </div>
-
-            {activeTab === "record" ? (
-              <AudioRecorder
-                disabled={analyzing}
-                onAnalyze={handleAnalyze}
-                onRecordingStateChange={handleRecordingStateChange}
-              />
-            ) : (
-              <AudioUploader disabled={analyzing} onAnalyze={handleAnalyze} />
-            )}
-          </div>
-        </div>
-
-        {/* Right Side: Timer + Cue Card Drawer */}
-        <div className="space-y-6 lg:col-span-5 xl:col-span-4">
+      {/* Studio Stage: 7 Cols Open Recording Flow + 5 Cols Cue Card */}
+      <div className="grid grid-cols-1 items-start gap-gutter-xl lg:grid-cols-12">
+        {/* Left 7 Columns: Timekeeper + Audio Capture */}
+        <div className="flex flex-col gap-gutter-lg lg:col-span-7">
           <PresentationTimer
             isRecordingActive={isRecordingActive}
             recordingElapsedSec={recordingElapsedSec}
@@ -391,9 +310,116 @@ export default function PracticeStudioPage() {
             onRangeChange={handleRangeChange}
           />
 
+          {/* Soft Tonal Audio Capture Stage */}
+          <article className="flex flex-col gap-gutter-lg rounded-xl border border-outline-variant bg-surface-container-lowest p-gutter-lg sm:p-gutter-xl">
+            <div className="flex flex-wrap items-center justify-between gap-gutter-sm">
+              <div
+                role="tablist"
+                aria-label="Audio input mode"
+                className="inline-flex gap-1 rounded-full bg-surface-container-low p-1"
+              >
+                <button
+                  role="tab"
+                  type="button"
+                  aria-selected={activeTab === "record"}
+                  onClick={() => handleTabSwitch("record")}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 font-label text-label-md transition-colors duration-[120ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    activeTab === "record"
+                      ? "bg-surface-container-lowest text-primary"
+                      : "text-on-surface-variant hover:text-on-surface"
+                  )}
+                >
+                  <Mic className="h-4 w-4" aria-hidden="true" />
+                  <span>Record Live</span>
+                </button>
+                <button
+                  role="tab"
+                  type="button"
+                  aria-selected={activeTab === "upload"}
+                  onClick={() => handleTabSwitch("upload")}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 font-label text-label-md transition-colors duration-[120ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    activeTab === "upload"
+                      ? "bg-surface-container-lowest text-primary"
+                      : "text-on-surface-variant hover:text-on-surface"
+                  )}
+                >
+                  <Upload className="h-4 w-4" aria-hidden="true" />
+                  <span>Upload Audio</span>
+                </button>
+              </div>
+
+              {activeTab === "record" ? (
+                recorderStatus === "recording" || recorderStatus === "paused" ? (
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-label text-label-sm",
+                      micLevel === "good" &&
+                        "bg-success-container text-on-success-container",
+                      micLevel === "quiet" &&
+                        "bg-warning-container text-on-warning-container",
+                      micLevel === "loud" &&
+                        "bg-error-container text-on-error-container"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "h-1.5 w-1.5 rounded-full",
+                        micLevel === "good" && "bg-success",
+                        micLevel === "quiet" && "bg-warning",
+                        micLevel === "loud" && "bg-error"
+                      )}
+                      aria-hidden="true"
+                    />
+                    {micLevel === "good" && "Good level"}
+                    {micLevel === "quiet" && "Too quiet — move closer"}
+                    {micLevel === "loud" && "Loud — back up slightly"}
+                  </span>
+                ) : recorderStatus === "recorded" ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-success-container px-3 py-1 font-label text-label-sm text-on-success-container">
+                    <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
+                    Take ready
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-container-low px-3 py-1 font-label text-label-sm text-on-surface-variant">
+                    <span className="h-1.5 w-1.5 rounded-full bg-outline" aria-hidden="true" />
+                    Mic ready
+                  </span>
+                )
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-container-low px-3 py-1 font-label text-label-sm text-on-surface-variant">
+                  Max 25 MB
+                </span>
+              )}
+            </div>
+
+            {activeTab === "record" ? (
+              <AudioRecorder
+                disabled={analyzing}
+                onAnalyze={handleAnalyze}
+                onRecordingStateChange={handleRecordingStateChange}
+                onMicStatusChange={handleMicStatusChange}
+              />
+            ) : (
+              <AudioUploader disabled={analyzing} onAnalyze={handleAnalyze} />
+            )}
+          </article>
+        </div>
+
+        {/* Right 5 Columns: Speaker Cue Card */}
+        <div className="lg:col-span-5">
           <NotesDrawer />
         </div>
       </div>
+
+      {/* Subtle One-Line Privacy Note */}
+      <footer className="flex items-center justify-center gap-gutter-sm pt-gutter-sm text-on-surface-variant">
+        <Lock className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <p className="font-body text-body-sm">
+          Audio is analyzed ephemerally and saved locally in your browser.
+        </p>
+      </footer>
     </div>
   );
 }

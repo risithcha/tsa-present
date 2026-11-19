@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Clock, Pause, Play, RotateCcw } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  Pause,
+  Play,
+  RotateCcw,
+} from "lucide-react";
 import type { TimerPresetId } from "@/lib/types";
 import { cn, formatTime } from "@/lib/utils";
 
@@ -23,14 +30,14 @@ const PRESETS: PresetConfig[] = [
   },
   {
     id: "tsa_prepared",
-    label: "TSA Prepared (3–5m)",
-    shortLabel: "Prepared 3–5m",
+    label: "TSA Prepared 3–5m",
+    shortLabel: "TSA Prepared 3–5m",
     minSec: 180,
     maxSec: 300,
   },
   {
     id: "tsa_extemp",
-    label: "TSA Extemp (2–4m)",
+    label: "TSA Extemp 2–4m",
     shortLabel: "Extemp 2–4m",
     minSec: 120,
     maxSec: 240,
@@ -113,11 +120,9 @@ export function PresentationTimer({
     if (minSec === null || maxSec === null) {
       return {
         status: "neutral" as const,
-        label: "Open Pacing",
-        cardClass: "border-white/10 bg-slate-900/60",
-        pillClass: "bg-indigo-500/15 text-indigo-300 border-indigo-500/30",
-        dotClass: "bg-indigo-400",
-        timerClass: "text-white",
+        label: "Open pacing",
+        statusClass: "text-on-surface-variant",
+        timerClass: "text-on-surface",
       };
     }
 
@@ -126,46 +131,35 @@ export function PresentationTimer({
     if (displayedSec > maxSec) {
       return {
         status: "red" as const,
-        label: "RED CARD • Overtime",
-        cardClass:
-          "border-rose-500/45 bg-rose-950/35 shadow-[0_0_30px_-8px_rgba(244,63,94,0.4)]",
-        pillClass: "bg-rose-500/20 text-rose-200 border-rose-500/40",
-        dotClass: "bg-rose-400",
-        timerClass: "text-rose-200",
+        label: `Overtime · Max ${formatTime(maxSec)}`,
+        statusClass: "text-error",
+        timerClass: "text-error",
       };
     }
 
     if (displayedSec >= warnStart) {
       return {
         status: "amber" as const,
-        label: "AMBER CARD • Wrap Up Soon",
-        cardClass:
-          "border-amber-500/45 bg-amber-950/30 shadow-[0_0_30px_-8px_rgba(245,158,11,0.35)]",
-        pillClass: "bg-amber-500/20 text-amber-200 border-amber-500/40",
-        dotClass: "bg-amber-400",
-        timerClass: "text-amber-200",
+        label: `Wrap up soon · Max ${formatTime(maxSec)}`,
+        statusClass: "text-warning",
+        timerClass: "text-warning",
       };
     }
 
     if (displayedSec >= minSec) {
       return {
         status: "green" as const,
-        label: "GREEN CARD • In Target Window",
-        cardClass:
-          "border-emerald-500/45 bg-emerald-950/30 shadow-[0_0_30px_-8px_rgba(16,185,129,0.35)]",
-        pillClass: "bg-emerald-500/20 text-emerald-200 border-emerald-500/40",
-        dotClass: "bg-emerald-400",
-        timerClass: "text-emerald-200",
+        label: `In target window (${formatTime(minSec)}–${formatTime(maxSec)})`,
+        statusClass: "text-success",
+        timerClass: "text-on-surface",
       };
     }
 
     return {
       status: "building" as const,
-      label: `Target ${formatTime(minSec)}–${formatTime(maxSec)}`,
-      cardClass: "border-white/10 bg-slate-900/60",
-      pillClass: "bg-slate-800/80 text-slate-300 border-white/10",
-      dotClass: "bg-cyan-400",
-      timerClass: "text-white",
+      label: `Target window ${formatTime(minSec)}–${formatTime(maxSec)}`,
+      statusClass: "text-on-surface-variant",
+      timerClass: "text-on-surface",
     };
   }, [displayedSec, minSec, maxSec]);
 
@@ -174,53 +168,112 @@ export function PresentationTimer({
     return Math.min(100, (displayedSec / maxSec) * 100);
   }, [displayedSec, maxSec]);
 
-  return (
-    <div
-      className={cn(
-        "rounded-2xl border p-4 transition-colors duration-300 sm:p-5",
-        zone.cardClass
-      )}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4 text-cyan-400" />
-          <h3 className="text-sm font-semibold text-slate-100">
-            TSA Timekeeper
-          </h3>
-        </div>
-        <span
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold tracking-wide",
-            zone.pillClass
-          )}
-        >
-          <span className={cn("h-1.5 w-1.5 rounded-full", zone.dotClass)} />
-          {zone.label}
-        </span>
-      </div>
+  const targetWindowStyle = useMemo(() => {
+    if (!minSec || !maxSec || maxSec <= 0) return null;
+    const warnStart = Math.max(minSec, maxSec - 30);
+    const leftPct = Math.min(100, Math.max(0, (minSec / maxSec) * 100));
+    const widthPct = Math.max(0, Math.min(100 - leftPct, ((warnStart - minSec) / maxSec) * 100));
+    return {
+      left: `${leftPct}%`,
+      width: `${widthPct}%`,
+    };
+  }, [minSec, maxSec]);
 
-      {/* Preset selector pills */}
-      <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-        {PRESETS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setPreset(item.id)}
+  return (
+    <section
+      aria-label="Presentation Timekeeper"
+      className="flex flex-col gap-gutter-md"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-gutter-sm">
+        <div className="flex flex-wrap items-center gap-gutter-md">
+          <div className="flex items-center gap-gutter-sm">
+            <div
+              className={cn(
+                "font-mono text-mono-lg-mobile sm:text-mono-lg tabular-nums transition-colors duration-[120ms]",
+                zone.timerClass
+              )}
+            >
+              {formatTime(displayedSec)}
+            </div>
+
+            {!isRecordingActive && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setStandaloneRunning((r) => !r)}
+                  aria-label={standaloneRunning ? "Pause practice timer" : "Start practice timer"}
+                  title={standaloneRunning ? "Pause timer" : "Start practice timer"}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-outline-variant bg-surface-container-lowest text-on-surface transition-colors duration-[120ms] hover:bg-surface-container-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  {standaloneRunning ? (
+                    <Pause className="h-3.5 w-3.5" aria-hidden="true" />
+                  ) : (
+                    <Play className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStandaloneRunning(false);
+                    setStandaloneSec(0);
+                  }}
+                  aria-label="Reset practice timer"
+                  title="Reset timer"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-outline-variant bg-surface-container-lowest text-on-surface-variant transition-colors duration-[120ms] hover:bg-surface-container-low hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          <span
             className={cn(
-              "rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all",
-              preset === item.id
-                ? "border-indigo-400/50 bg-indigo-500/20 text-white"
-                : "border-white/[0.06] bg-white/[0.03] text-slate-400 hover:bg-white/[0.06] hover:text-slate-200"
+              "inline-flex items-center gap-1.5 font-label text-label-md",
+              zone.statusClass
             )}
           >
-            {item.shortLabel}
-          </button>
-        ))}
+            {zone.status === "green" ? (
+              <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+            ) : zone.status === "red" || zone.status === "amber" ? (
+              <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+            ) : (
+              <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />
+            )}
+            <span>{zone.label}</span>
+          </span>
+        </div>
+
+        <div
+          role="group"
+          aria-label="Timekeeper presets"
+          className="inline-flex flex-wrap items-center gap-1"
+        >
+          {PRESETS.map((item) => {
+            const active = preset === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setPreset(item.id)}
+                className={cn(
+                  "rounded-full px-3 py-1 font-label text-label-sm transition-colors duration-[120ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  active
+                    ? "border border-outline-variant bg-surface-container-lowest text-primary"
+                    : "border border-transparent text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface"
+                )}
+              >
+                {item.shortLabel}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {preset === "custom" && (
-        <div className="mt-3 grid grid-cols-2 gap-3 rounded-xl border border-white/[0.06] bg-slate-950/50 p-3">
-          <label className="flex flex-col gap-1 text-[11px] text-slate-400">
+        <div className="grid grid-cols-2 gap-3 rounded-md border border-outline-variant bg-surface-container-low p-3 sm:max-w-sm">
+          <label className="flex flex-col gap-1 font-label text-label-sm text-on-surface-variant">
             <span>Min (minutes)</span>
             <input
               type="number"
@@ -229,10 +282,10 @@ export function PresentationTimer({
               step="0.5"
               value={customMinInput}
               onChange={(e) => setCustomMinInput(e.target.value)}
-              className="rounded-lg border border-white/10 bg-slate-900 px-2.5 py-1.5 text-xs text-white focus:border-cyan-400 focus:outline-none"
+              className="rounded border border-outline-variant bg-surface-container-lowest px-2.5 py-1.5 font-mono text-mono-sm text-on-surface focus:border-primary focus:outline-none"
             />
           </label>
-          <label className="flex flex-col gap-1 text-[11px] text-slate-400">
+          <label className="flex flex-col gap-1 font-label text-label-sm text-on-surface-variant">
             <span>Max (minutes)</span>
             <input
               type="number"
@@ -241,86 +294,45 @@ export function PresentationTimer({
               step="0.5"
               value={customMaxInput}
               onChange={(e) => setCustomMaxInput(e.target.value)}
-              className="rounded-lg border border-white/10 bg-slate-900 px-2.5 py-1.5 text-xs text-white focus:border-cyan-400 focus:outline-none"
+              className="rounded border border-outline-variant bg-surface-container-lowest px-2.5 py-1.5 font-mono text-mono-sm text-on-surface focus:border-primary focus:outline-none"
             />
           </label>
         </div>
       )}
 
-      {/* Live readout */}
-      <div className="mt-4 flex items-center justify-between gap-4">
-        <div>
-          <div
-            className={cn(
-              "font-mono text-3xl font-bold tracking-tight tabular-nums sm:text-4xl",
-              zone.timerClass
+      {minSec !== null && maxSec !== null ? (
+        <div className="flex flex-col gap-1.5">
+          <div className="relative h-3 overflow-hidden rounded-full bg-surface-container-high">
+            {targetWindowStyle && (
+              <div
+                className="absolute inset-y-0 bg-success-container"
+                style={targetWindowStyle}
+              />
             )}
-          >
-            {formatTime(displayedSec)}
-          </div>
-          <p className="mt-0.5 text-[11px] text-slate-400">
-            {isRecordingActive
-              ? "Synced with live microphone recording"
-              : minSec && maxSec
-                ? `Green at ${formatTime(minSec)} • Amber at ${formatTime(Math.max(minSec, maxSec - 30))} • Red after ${formatTime(maxSec)}`
-                : "No strict time limit"}
-          </p>
-        </div>
-
-        {!isRecordingActive && (
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setStandaloneRunning((r) => !r)}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10"
-              title={standaloneRunning ? "Pause timer" : "Start practice timer"}
-            >
-              {standaloneRunning ? (
-                <Pause className="h-4 w-4" />
-              ) : (
-                <Play className="h-4 w-4" />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setStandaloneRunning(false);
-                setStandaloneSec(0);
-              }}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-400 transition hover:bg-white/10 hover:text-slate-200"
-              title="Reset timer"
-            >
-              <RotateCcw className="h-4 w-4" />
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Target zone progress bar */}
-      {minSec !== null && maxSec !== null && (
-        <div className="mt-3">
-          <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-950/80 ring-1 ring-white/5">
-            {/* Green window marker */}
-            <div
-              className="absolute inset-y-0 bg-emerald-500/20"
-              style={{
-                left: `${(minSec / maxSec) * 100}%`,
-                right: `${Math.min(100, (30 / maxSec) * 100)}%`,
-              }}
-            />
             <div
               className={cn(
-                "h-full rounded-full transition-all duration-300",
-                zone.status === "red" && "bg-rose-500",
-                zone.status === "amber" && "bg-amber-400",
-                zone.status === "green" && "bg-emerald-400",
-                zone.status === "building" && "bg-cyan-400"
+                "absolute inset-y-0 left-0 rounded-full transition-all duration-300",
+                zone.status === "red" && "bg-error",
+                zone.status === "amber" && "bg-warning",
+                zone.status === "green" && "bg-success",
+                zone.status === "building" && "bg-primary"
               )}
               style={{ width: `${progressPct}%` }}
             />
           </div>
+          <div className="flex items-center justify-between font-mono text-mono-sm text-on-surface-variant tabular-nums">
+            <span>0:00</span>
+            <span>Min {formatTime(minSec)}</span>
+            <span>Max {formatTime(maxSec)}</span>
+          </div>
         </div>
+      ) : (
+        <p className="font-body text-body-sm text-on-surface-variant">
+          {isRecordingActive
+            ? "Synced with live microphone recording · Open time limit."
+            : "Open pacing mode — practice freely with no strict target cutoff."}
+        </p>
       )}
-    </div>
+    </section>
   );
 }

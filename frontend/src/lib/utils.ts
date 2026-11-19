@@ -39,17 +39,17 @@ export function formatShortDate(timestamp: number): string {
 export function getTierBadgeClasses(tier: Tier): string {
   switch (tier) {
     case "Exemplary":
-      return "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
+      return "bg-success-container text-on-success-container border-success/20";
     case "Adequate":
-      return "bg-amber-500/15 text-amber-300 border-amber-500/30";
+      return "bg-warning-container text-on-warning-container border-warning/20";
     case "Developing":
-      return "bg-rose-500/15 text-rose-300 border-rose-500/30";
+      return "bg-error-container text-on-error-container border-error/20";
   }
 }
 
 export function getScoreAccentColor(score: number): string {
-  if (score >= 85) return "#10b981"; // emerald-500
-  if (score >= 70) return "#06b6d4"; // cyan-500
-  if (score >= 55) return "#f59e0b"; // amber-500
-  return "#f43f5e"; // rose-500
+  if (score >= 85) return "#006C4A"; // success
+  if (score >= 70) return "#0037B0"; // primary
+  if (score >= 55) return "#904D00"; // warning
+  return "#BF0715"; // error
 }

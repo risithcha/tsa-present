@@ -8,9 +8,12 @@ import {
   ArrowLeft,
   Calendar,
   Clock,
+  Download,
+  FileAudio,
   Headphones,
   History,
   Mic,
+  Printer,
 } from "lucide-react";
 import { getSession } from "@/lib/db";
 import type { PracticeSession } from "@/lib/types";
@@ -28,6 +31,16 @@ import {
   WaveformPlayer,
   type WaveformPlayerHandle,
 } from "@/components/report/WaveformPlayer";
+
+function getAudioExtension(mimeType?: string): string {
+  const mime = (mimeType ?? "").toLowerCase();
+  if (mime.includes("mp4") || mime.includes("m4a")) return ".mp4";
+  if (mime.includes("wav")) return ".wav";
+  if (mime.includes("mpeg") || mime.includes("mp3")) return ".mp3";
+  if (mime.includes("ogg")) return ".ogg";
+  if (mime.includes("webm")) return ".webm";
+  return ".webm";
+}
 
 export default function ReportDashboardPage() {
   const params = useParams<{ id: string }>();
@@ -71,14 +84,18 @@ export default function ReportDashboardPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="h-48 animate-pulse rounded-3xl border border-white/5 bg-slate-900/50" />
-        <div className="h-40 animate-pulse rounded-2xl border border-white/5 bg-slate-900/50" />
+      <div className="space-y-6 pb-8">
+        <div className="h-14 animate-pulse rounded-xl border border-outline-variant bg-surface-container-lowest" />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          <div className="h-48 animate-pulse rounded-xl border border-outline-variant bg-surface-container-lowest lg:col-span-7" />
+          <div className="h-48 animate-pulse rounded-xl border border-outline-variant bg-surface-container-low lg:col-span-5" />
+        </div>
+        <div className="h-40 animate-pulse rounded-xl border border-outline-variant bg-surface-container-lowest" />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
           {[1, 2, 3, 4, 5].map((i) => (
             <div
               key={i}
-              className="h-28 animate-pulse rounded-2xl border border-white/5 bg-slate-900/50"
+              className="h-28 animate-pulse rounded-xl border border-outline-variant bg-surface-container-lowest"
             />
           ))}
         </div>
@@ -88,26 +105,28 @@ export default function ReportDashboardPage() {
 
   if (!session) {
     return (
-      <div className="mx-auto max-w-lg rounded-3xl border border-white/10 bg-slate-900/70 p-8 text-center backdrop-blur-xl">
-        <h1 className="text-xl font-bold text-white">Report Not Found</h1>
-        <p className="mt-2 text-sm text-slate-400">
+      <div className="mx-auto max-w-lg rounded-xl border border-outline-variant bg-surface-container-lowest p-8 text-center">
+        <h1 className="font-headline text-headline-md text-on-surface">
+          Report Not Found
+        </h1>
+        <p className="mt-2 font-body text-body-md text-on-surface-variant">
           This presentation take is stored locally in your browser&apos;s
           IndexedDB and could not be found on this device.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 px-5 py-2.5 text-xs font-semibold text-white"
+            className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 font-label text-label-sm text-on-primary transition-colors duration-120 hover:bg-primary-container"
           >
-            <Mic className="h-4 w-4" />
-            New Practice Take
+            <Mic className="h-4 w-4" aria-hidden="true" />
+            <span>New Practice Take</span>
           </Link>
           <Link
             href="/history"
-            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-xs font-semibold text-slate-200 hover:bg-white/10"
+            className="inline-flex items-center gap-2 rounded-full border border-outline-variant bg-surface-container-low px-5 py-2.5 font-label text-label-sm text-on-surface transition-colors duration-120 hover:bg-surface-container"
           >
-            <History className="h-4 w-4" />
-            View History
+            <History className="h-4 w-4" aria-hidden="true" />
+            <span>View History</span>
           </Link>
         </div>
       </div>
@@ -116,34 +135,122 @@ export default function ReportDashboardPage() {
 
   const { analysis } = session;
   const { coaching, acoustics, disfluencies } = analysis;
+  const nextTakeHref = `/?title=${encodeURIComponent(session.title)}&rubric=${encodeURIComponent(analysis.rubric_id)}`;
+
+  const handleDownloadAudio = () => {
+    if (!session.audioBlob) return;
+    const ext = getAudioExtension(session.audioMimeType || session.audioBlob.type);
+    const url = URL.createObjectURL(session.audioBlob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tsa-present-${analysis.analysis_id}${ext}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportJson = () => {
+    const blob = new Blob([JSON.stringify(analysis, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tsa-present-${analysis.analysis_id}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
 
   return (
-    <div className="space-y-6 pb-8">
-      {/* Top Breadcrumb */}
-      <div className="no-print flex flex-wrap items-center justify-between gap-3">
-        <Link
-          href="/history"
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 transition hover:text-white"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to Practice History
-        </Link>
-
-        <div className="flex items-center gap-2 text-xs text-slate-400">
-          <span className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 font-mono text-[11px] text-slate-300">
-            {analysis.rubric_id}
-          </span>
+    <div className="space-y-8 pb-10">
+      {/* Top Breadcrumb + Editorial Report Header */}
+      <div className="space-y-3">
+        <div className="no-print flex items-center justify-between gap-3">
+          <Link
+            href="/history"
+            className="inline-flex items-center gap-1.5 font-label text-label-md text-on-surface-variant transition-colors duration-120 hover:text-primary"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>Back to Practice History</span>
+          </Link>
         </div>
+
+        <section className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="inline-flex items-center rounded-full border border-outline-variant bg-surface-container-lowest px-3 py-0.5 font-mono text-mono-sm text-on-surface-variant">
+                {analysis.rubric_id}
+              </span>
+              <span className="inline-flex items-center gap-1.5 font-mono text-mono-sm text-on-surface-variant tabular-nums">
+                <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
+                {formatDate(session.createdAt)}
+              </span>
+              <span className="inline-flex items-center gap-1.5 font-mono text-mono-sm text-on-surface-variant tabular-nums">
+                <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                {formatDurationVerbose(acoustics.duration_sec)}
+              </span>
+            </div>
+
+            <h1 className="font-headline text-headline-lg tracking-tight text-on-surface print-text-dark">
+              {session.title}
+            </h1>
+          </div>
+
+          <div className="no-print flex flex-wrap items-center gap-2">
+            {session.audioBlob && (
+              <button
+                type="button"
+                onClick={handleDownloadAudio}
+                className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant bg-surface-container-lowest px-3.5 py-2 font-label text-label-sm text-on-surface transition-colors duration-120 hover:bg-surface-container-low"
+              >
+                <FileAudio
+                  className="h-4 w-4 text-tertiary"
+                  aria-hidden="true"
+                />
+                <span>Download Audio</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleExportJson}
+              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant bg-surface-container-lowest px-3.5 py-2 font-label text-label-sm text-on-surface transition-colors duration-120 hover:bg-surface-container-low"
+            >
+              <Download className="h-4 w-4 text-primary" aria-hidden="true" />
+              <span>Export JSON</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant bg-surface-container-lowest px-3.5 py-2 font-label text-label-sm text-on-surface transition-colors duration-120 hover:bg-surface-container-low"
+            >
+              <Printer className="h-4 w-4 text-secondary" aria-hidden="true" />
+              <span>Print / Save PDF</span>
+            </button>
+
+            <Link
+              href={nextTakeHref}
+              className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 font-label text-label-sm text-on-primary transition-colors duration-120 hover:bg-primary-container"
+            >
+              <Mic className="h-4 w-4" aria-hidden="true" />
+              <span>Record Next Take</span>
+            </Link>
+          </div>
+        </section>
       </div>
 
       {/* Warnings Banner */}
       {analysis.warnings.length > 0 && (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-200">
-          <div className="flex items-center gap-2 font-semibold text-amber-100">
-            <AlertTriangle className="h-4 w-4 text-amber-400" />
-            Analysis Notices
+        <div className="rounded-xl border border-warning/25 bg-warning-container/60 p-4 text-on-warning-container">
+          <div className="flex items-center gap-2 font-title text-title-md text-on-warning-container">
+            <AlertTriangle className="h-4 w-4 text-warning" aria-hidden="true" />
+            <span>Analysis Notices</span>
           </div>
-          <ul className="mt-1.5 list-inside list-disc space-y-1 text-amber-200/90">
+          <ul className="mt-1.5 list-inside list-disc space-y-1 font-body text-body-sm text-on-warning-container">
             {analysis.warnings.map((warning, idx) => (
               <li key={idx}>{warning}</li>
             ))}
@@ -151,11 +258,10 @@ export default function ReportDashboardPage() {
         </div>
       )}
 
-      {/* Hero Scorecard */}
-      <section className="print-card relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/90 via-slate-900/75 to-indigo-950/40 p-6 shadow-2xl backdrop-blur-xl sm:p-8">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:gap-8">
-          {/* Score Ring */}
-          <div className="flex shrink-0 flex-col items-center justify-center">
+      {/* Executive Score Split + What the AI Coach Heard */}
+      <section className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-12">
+        <div className="print-card flex flex-col items-center gap-6 rounded-xl border border-outline-variant bg-surface-container-lowest p-6 sm:flex-row sm:items-center lg:col-span-7">
+          <div className="shrink-0">
             <ScoreRing
               score={coaching.overall_score}
               tier={coaching.overall_tier}
@@ -163,48 +269,42 @@ export default function ReportDashboardPage() {
             />
           </div>
 
-          {/* Summary & Meta */}
-          <div className="flex-1 space-y-4">
-            <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex-1 space-y-3 text-center sm:text-left">
+            <div className="flex flex-wrap items-center justify-center gap-2.5 sm:justify-start">
               <span
                 className={cn(
-                  "rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide",
+                  "inline-flex items-center rounded-full border px-3 py-1 font-label text-label-md",
                   getTierBadgeClasses(coaching.overall_tier)
                 )}
               >
                 {coaching.overall_tier} Delivery
               </span>
-              <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
-                <Calendar className="h-3.5 w-3.5" />
-                {formatDate(session.createdAt)}
-              </span>
-              <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
-                <Clock className="h-3.5 w-3.5" />
-                {formatDurationVerbose(acoustics.duration_sec)}
+              <span className="font-mono text-mono-sm text-on-surface-variant tabular-nums">
+                {Math.round(coaching.overall_score)} / 100
               </span>
             </div>
 
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-white print-text-dark sm:text-3xl">
-                {session.title}
-              </h1>
-              <p className="mt-2 text-sm leading-relaxed text-slate-300 print:text-slate-700">
-                {coaching.executive_summary}
-              </p>
-            </div>
-
-            {/* What the AI Coach Heard Callout */}
-            <div className="rounded-2xl border border-cyan-500/25 bg-cyan-500/[0.08] p-4">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-cyan-300 print:text-indigo-700">
-                <Headphones className="h-4 w-4" />
-                What the AI Coach Heard
-              </div>
-              <p className="mt-1.5 text-sm leading-relaxed text-slate-200 print:text-slate-800">
-                {coaching.vocal_delivery_impression}
-              </p>
-            </div>
+            <p className="font-body text-body-md leading-relaxed text-on-surface-variant">
+              {coaching.executive_summary}
+            </p>
           </div>
         </div>
+
+        {/* What the AI Coach Heard Callout */}
+        <article className="print-card flex flex-col justify-center gap-3 rounded-xl border border-outline-variant bg-surface-container-low p-6 lg:col-span-5">
+          <header className="flex items-center gap-2">
+            <Headphones
+              className="h-5 w-5 text-tertiary"
+              aria-hidden="true"
+            />
+            <h2 className="font-title text-title-md text-on-surface print-text-dark">
+              What the AI Coach Heard
+            </h2>
+          </header>
+          <p className="font-body text-body-md leading-relaxed text-on-surface-variant">
+            {coaching.vocal_delivery_impression}
+          </p>
+        </article>
       </section>
 
       {/* Waveform & Synced Transcript */}

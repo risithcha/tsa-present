@@ -14,6 +14,7 @@ export function BackendWarmupBadge() {
   const [showDetails, setShowDetails] = useState(false);
   const retryCountRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const checkHealth = useCallback(async (isRetry = false) => {
     if (!isRetry) {
@@ -56,6 +57,32 @@ export function BackendWarmupBadge() {
     };
   }, [checkHealth]);
 
+  useEffect(() => {
+    if (!showDetails) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowDetails(false);
+      }
+    };
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setShowDetails(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showDetails]);
+
   const handleManualRetry = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     retryCountRef.current = 0;
@@ -63,111 +90,115 @@ export function BackendWarmupBadge() {
   };
 
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative">
       <button
         type="button"
         onClick={() => setShowDetails((prev) => !prev)}
+        aria-expanded={showDetails}
+        aria-haspopup="dialog"
         className={cn(
-          "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-all",
+          "inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-label text-label-sm transition-colors duration-[120ms] ease-state-change focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
           state === "ready" &&
-            "border-emerald-500/25 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15",
+            "bg-success-container text-on-success-container hover:brightness-95",
           state === "warming" &&
-            "border-amber-500/25 bg-amber-500/10 text-amber-300 hover:bg-amber-500/15",
+            "bg-warning-container text-on-warning-container hover:brightness-95",
           state === "offline" &&
-            "border-rose-500/25 bg-rose-500/10 text-rose-300 hover:bg-rose-500/15"
+            "bg-error-container text-on-error-container hover:brightness-95"
         )}
         title="Audio Engine Status"
       >
-        <span className="relative flex h-2 w-2">
-          {state === "warming" && (
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
-          )}
-          {state === "ready" && (
-            <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-emerald-400 opacity-60" />
-          )}
-          <span
-            className={cn(
-              "relative inline-flex h-2 w-2 rounded-full",
-              state === "ready" && "bg-emerald-400",
-              state === "warming" && "bg-amber-400",
-              state === "offline" && "bg-rose-400"
+        <span role="status" className="inline-flex items-center gap-1.5">
+          <span className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
+            {state === "warming" && (
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-warning opacity-60" />
             )}
-          />
-        </span>
-        <span className="hidden sm:inline">
-          {state === "ready" && "Audio Engine Ready"}
-          {state === "warming" && "Warming up engine..."}
-          {state === "offline" && "Engine Offline"}
-        </span>
-        <span className="sm:hidden">
-          {state === "ready" && "Ready"}
-          {state === "warming" && "Warming"}
-          {state === "offline" && "Offline"}
+            <span
+              className={cn(
+                "relative inline-flex h-2 w-2 rounded-full",
+                state === "ready" && "bg-success",
+                state === "warming" && "bg-warning",
+                state === "offline" && "bg-error"
+              )}
+            />
+          </span>
+          <span className="hidden sm:inline">
+            {state === "ready" && "Audio Engine Ready"}
+            {state === "warming" && "Warming up engine..."}
+            {state === "offline" && "Engine Offline"}
+          </span>
+          <span className="sm:hidden">
+            {state === "ready" && "Ready"}
+            {state === "warming" && "Warming"}
+            {state === "offline" && "Offline"}
+          </span>
         </span>
       </button>
 
       {showDetails && (
-        <div className="absolute right-0 z-50 mt-2 w-64 rounded-xl border border-white/10 bg-slate-900/95 p-3.5 text-xs shadow-2xl backdrop-blur-xl">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="font-semibold text-slate-200">
+        <div
+          role="dialog"
+          aria-label="Speech Engine Diagnostics"
+          className="absolute right-0 z-50 mt-2 w-72 rounded-md border border-outline-variant bg-surface-container-lowest p-4 shadow-sm"
+        >
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <span className="font-label text-label-md text-on-surface">
               Speech Engine Diagnostics
             </span>
             <button
               type="button"
               onClick={handleManualRetry}
-              className="inline-flex items-center gap-1 rounded-md bg-white/5 px-2 py-1 text-[11px] text-slate-300 hover:bg-white/10"
+              className="inline-flex items-center gap-1 rounded border border-outline-variant bg-surface-container-low px-2 py-1 font-label text-label-sm text-on-surface transition-colors duration-[120ms] ease-state-change hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <RefreshCw className="h-3 w-3" />
               Recheck
             </button>
           </div>
           {health ? (
-            <dl className="space-y-1.5 text-slate-400">
-              <div className="flex justify-between">
+            <dl className="space-y-2 font-body text-body-sm text-on-surface-variant">
+              <div className="flex items-center justify-between">
                 <dt>Silero VAD</dt>
                 <dd
-                  className={
-                    health.vad_loaded ? "text-emerald-400" : "text-amber-400"
-                  }
+                  className={cn(
+                    "font-label text-label-sm",
+                    health.vad_loaded ? "text-success" : "text-warning"
+                  )}
                 >
                   {health.vad_loaded ? "Loaded" : "Loading"}
                 </dd>
               </div>
-              <div className="flex justify-between">
+              <div className="flex items-center justify-between">
                 <dt>Deepgram STT</dt>
                 <dd
-                  className={
-                    health.deepgram_configured
-                      ? "text-emerald-400"
-                      : "text-rose-400"
-                  }
+                  className={cn(
+                    "font-label text-label-sm",
+                    health.deepgram_configured ? "text-success" : "text-error"
+                  )}
                 >
                   {health.deepgram_configured ? "Connected" : "Unconfigured"}
                 </dd>
               </div>
-              <div className="flex justify-between">
+              <div className="flex items-center justify-between">
                 <dt>Gemini Coach</dt>
                 <dd
-                  className={
-                    health.gemini_configured
-                      ? "text-emerald-400"
-                      : "text-rose-400"
-                  }
+                  className={cn(
+                    "font-label text-label-sm",
+                    health.gemini_configured ? "text-success" : "text-error"
+                  )}
                 >
                   {health.gemini_configured ? "Connected" : "Unconfigured"}
                 </dd>
               </div>
               {health.gemini_model && (
-                <div className="flex justify-between border-t border-white/5 pt-1.5">
+                <div className="flex items-center justify-between border-t border-outline-variant pt-2">
                   <dt>Model</dt>
-                  <dd className="font-mono text-[11px] text-cyan-300">
+                  <dd className="font-mono text-mono-sm text-primary">
                     {health.gemini_model}
                   </dd>
                 </div>
               )}
             </dl>
           ) : (
-            <p className="text-slate-400">
+            <p className="font-body text-body-sm text-on-surface-variant">
               {state === "warming"
                 ? "Connecting to FastAPI speech analysis backend..."
                 : "Could not reach backend API. Ensure FastAPI is running on port 8000."}

@@ -1,16 +1,28 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import {
+  Wix_Madefor_Display,
+  Radio_Canada_Big,
+  Red_Hat_Mono,
+} from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/Navbar";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const wixDisplay = Wix_Madefor_Display({
+  variable: "--font-wix-display",
   subsets: ["latin"],
+  weight: ["500", "600", "700"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const radioCanada = Radio_Canada_Big({
+  variable: "--font-radio-canada",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const redHatMono = Red_Hat_Mono({
+  variable: "--font-red-hat-mono",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -25,13 +37,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} studio-backdrop min-h-screen bg-[#07090f] text-slate-100 antialiased selection:bg-indigo-500/30 selection:text-cyan-200`}
-      >
+    <html
+      lang="en"
+      className={`${wixDisplay.variable} ${radioCanada.variable} ${redHatMono.variable}`}
+    >
+      <body className="min-h-screen bg-surface text-on-surface font-body antialiased selection:bg-primary/15 selection:text-primary">
         <div className="flex min-h-screen flex-col">
           <Navbar />
-          <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+          <main className="mx-auto w-full max-w-[1280px] flex-1 px-6 py-8">
             {children}
           </main>
         </div>

@@ -1,20 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, FileText, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, StickyNote, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const STORAGE_KEY = "tsa-present-cue-notes";
+const MIN_FONT_PX = 12;
+const MAX_FONT_PX = 22;
+const DEFAULT_FONT_PX = 15;
 
-const SAMPLE_OUTLINE = `• Hook: Start with a crisp problem statistic or real-world story
-• Problem & Solution: State what your project solves in one clear sentence
-• Engineering / Evidence: Highlight testing iterations & measurable results
-• Impact & Conclusion: End decisively — pause 1 second before thanking judges`;
+const SAMPLE_OUTLINE = `01 Opening Hook: Start with a crisp problem statistic or real-world story.
+02 Constraints: State what your project solves and the key engineering bounds.
+03 Architecture: Walk through your core design and testing iterations.
+04 Field Data: Highlight measurable validation results and numbers.
+05 Close: State the impact clearly — pause 1 second before thanking judges.`;
 
 export function NotesDrawer() {
-  const [isOpen, setIsOpen] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(true);
   const [notes, setNotes] = useState("");
-  const [fontSize, setFontSize] = useState<"sm" | "md" | "lg">("md");
+  const [fontSizePx, setFontSizePx] = useState<number>(DEFAULT_FONT_PX);
 
   useEffect(() => {
     try {
@@ -34,93 +38,113 @@ export function NotesDrawer() {
     }
   };
 
+  const adjustFontSize = (delta: number) => {
+    setFontSizePx((prev) =>
+      Math.min(MAX_FONT_PX, Math.max(MIN_FONT_PX, prev + delta))
+    );
+  };
+
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-slate-900/60 backdrop-blur-xl">
-      <button
-        type="button"
-        onClick={() => setIsOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left"
-      >
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-300 ring-1 ring-indigo-500/25">
-            <FileText className="h-4 w-4" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-white">
-              Speaker Cue Card
-            </h3>
-            <p className="text-[11px] text-slate-400">
-              Glanceable bullet points while you record (saved locally)
-            </p>
-          </div>
+    <aside
+      aria-label="Speaker Cue Card"
+      className="flex flex-col gap-gutter-md rounded-xl border border-outline-variant bg-surface-container-lowest p-gutter-lg sm:p-gutter-xl"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-gutter-sm">
+        <div className="flex items-center gap-gutter-sm">
+          <StickyNote className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+          <h2 className="font-headline text-headline-sm text-on-surface">
+            Cue Card
+          </h2>
         </div>
-        <span className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-slate-400">
-          {isOpen ? (
-            <ChevronUp className="h-4 w-4" />
-          ) : (
-            <ChevronDown className="h-4 w-4" />
-          )}
-        </span>
-      </button>
 
-      {isOpen && (
-        <div className="border-t border-white/[0.06] px-4 pb-4 pt-3">
-          <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-1 rounded-lg border border-white/[0.08] bg-slate-950/60 p-0.5 text-[11px]">
-              {(["sm", "md", "lg"] as const).map((sz) => (
-                <button
-                  key={sz}
-                  type="button"
-                  onClick={() => setFontSize(sz)}
-                  className={cn(
-                    "rounded-md px-2 py-0.5 font-medium uppercase transition",
-                    fontSize === sz
-                      ? "bg-indigo-500/25 text-white"
-                      : "text-slate-400 hover:text-slate-200"
-                  )}
-                >
-                  {sz}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-2">
-              {!notes && (
-                <button
-                  type="button"
-                  onClick={() => updateNotes(SAMPLE_OUTLINE)}
-                  className="rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-medium text-cyan-300 transition hover:bg-cyan-500/20"
-                >
-                  Load TSA Outline
-                </button>
-              )}
-              {notes && (
-                <button
-                  type="button"
-                  onClick={() => updateNotes("")}
-                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-slate-400 transition hover:text-rose-300"
-                >
-                  <Trash2 className="h-3 w-3" />
-                  Clear
-                </button>
-              )}
-            </div>
+        <div className="flex items-center gap-gutter-sm">
+          <div
+            className="inline-flex items-center gap-1 rounded-full bg-surface-container-low px-2 py-1"
+            role="group"
+            aria-label="Cue card font size"
+          >
+            <button
+              type="button"
+              onClick={() => adjustFontSize(-1)}
+              disabled={fontSizePx <= MIN_FONT_PX}
+              aria-label="Decrease cue card font size"
+              className="rounded-full px-1.5 py-0.5 font-label text-label-sm text-on-surface transition-colors duration-[120ms] hover:bg-surface-container-lowest disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              A-
+            </button>
+            <span className="px-1 font-mono text-mono-sm text-on-surface-variant tabular-nums">
+              {fontSizePx}px
+            </span>
+            <button
+              type="button"
+              onClick={() => adjustFontSize(1)}
+              disabled={fontSizePx >= MAX_FONT_PX}
+              aria-label="Increase cue card font size"
+              className="rounded-full px-1.5 py-0.5 font-label text-label-sm text-on-surface transition-colors duration-[120ms] hover:bg-surface-container-lowest disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              A+
+            </button>
           </div>
 
-          <textarea
-            value={notes}
-            onChange={(e) => updateNotes(e.target.value)}
-            rows={7}
-            placeholder="Paste your key talking points, transitions, or TSA judging criteria reminders here..."
-            className={cn(
-              "w-full resize-y rounded-xl border border-white/[0.08] bg-slate-950/70 p-3 leading-relaxed text-slate-200 placeholder:text-slate-500 focus:border-cyan-400/60 focus:outline-none",
-              fontSize === "sm" && "text-xs",
-              fontSize === "md" && "text-sm",
-              fontSize === "lg" && "text-base"
+          <button
+            type="button"
+            onClick={() => setMobileOpen((o) => !o)}
+            aria-expanded={mobileOpen}
+            aria-label={mobileOpen ? "Collapse cue card" : "Expand cue card"}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-outline-variant bg-surface-container-low text-on-surface-variant transition-colors duration-[120ms] hover:bg-surface-container hover:text-on-surface lg:hidden"
+          >
+            {mobileOpen ? (
+              <ChevronUp className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <ChevronDown className="h-4 w-4" aria-hidden="true" />
             )}
-          />
+          </button>
         </div>
-      )}
-    </div>
+      </div>
+
+      <div
+        className={cn(
+          "flex-col gap-gutter-sm",
+          mobileOpen ? "flex" : "hidden lg:flex"
+        )}
+      >
+        <textarea
+          value={notes}
+          onChange={(e) => updateNotes(e.target.value)}
+          rows={9}
+          aria-label="Speaker cue card notes"
+          placeholder="Jot down your opening hook, key engineering specs, transitions, or TSA judging reminders..."
+          style={{ fontSize: `${fontSizePx}px` }}
+          className="w-full resize-y rounded-md border border-outline-variant/80 bg-surface-container-low/65 p-3.5 font-body leading-relaxed text-on-surface placeholder:text-outline transition-colors duration-[120ms] focus:border-primary focus:bg-surface-container-lowest focus:outline-none"
+        />
+
+        <div className="flex flex-wrap items-center justify-between gap-gutter-sm">
+          <span className="font-body text-body-sm text-on-surface-variant">
+            Saved locally in your browser
+          </span>
+
+          <div className="flex items-center gap-gutter-sm">
+            {!notes.trim() ? (
+              <button
+                type="button"
+                onClick={() => updateNotes(SAMPLE_OUTLINE)}
+                className="rounded-full border border-outline-variant bg-surface-container-low px-3 py-1 font-label text-label-sm text-primary transition-colors duration-[120ms] hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                Load Sample TSA Outline
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => updateNotes("")}
+                className="inline-flex items-center gap-1 rounded-full border border-outline-variant bg-surface-container-low px-3 py-1 font-label text-label-sm text-on-surface-variant transition-colors duration-[120ms] hover:border-error/40 hover:bg-error-container/50 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </aside>
   );
 }

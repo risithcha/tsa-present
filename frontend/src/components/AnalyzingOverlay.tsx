@@ -55,24 +55,35 @@ export function AnalyzingOverlay({ visible }: AnalyzingOverlayProps) {
   if (!visible) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-xl">
-      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-900/95 p-6 shadow-2xl">
-        <div className="flex items-center gap-3">
-          <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-cyan-500 shadow-lg shadow-indigo-500/30">
-            <AudioWaveform className="h-6 w-6 animate-pulse text-white" />
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="analyzing-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-on-surface/25 p-4 backdrop-blur-sm"
+    >
+      <div className="w-full max-w-md rounded-xl border border-outline-variant bg-surface-container-lowest/95 p-gutter-lg shadow-xl backdrop-blur-md sm:p-gutter-xl">
+        <div className="flex items-center gap-gutter-md">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary text-on-primary">
+            <AudioWaveform className="h-5 w-5" aria-hidden="true" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-white">
+            <h2
+              id="analyzing-title"
+              className="font-headline text-headline-sm text-on-surface"
+            >
               Analyzing Your Presentation
             </h2>
-            <p className="text-xs text-slate-400">
-              Elapsed: <span className="font-mono text-cyan-300">{seconds}s</span>{" "}
-              • Ephemeral processing
+            <p className="mt-0.5 font-body text-body-sm text-on-surface-variant">
+              Elapsed:{" "}
+              <span className="font-mono text-mono-sm text-primary tabular-nums">
+                {seconds}s
+              </span>{" "}
+              · Ephemeral processing
             </p>
           </div>
         </div>
 
-        <div className="mt-6 space-y-3">
+        <div className="mt-6 flex flex-col gap-gutter-sm">
           {STAGES.map((stage, idx) => {
             const done = idx < stageIndex;
             const current = idx === stageIndex;
@@ -80,29 +91,39 @@ export function AnalyzingOverlay({ visible }: AnalyzingOverlayProps) {
               <div
                 key={stage.title}
                 className={cn(
-                  "flex items-start gap-3 rounded-xl border p-3 transition-all",
-                  current &&
-                    "border-cyan-500/40 bg-cyan-500/10",
-                  done && "border-emerald-500/20 bg-emerald-500/5",
+                  "flex items-start gap-3 rounded-md border p-3 transition-colors duration-[120ms]",
+                  current && "border-primary/40 bg-surface-container-low",
+                  done && "border-success/25 bg-success-container/40",
                   !current &&
                     !done &&
-                    "border-white/[0.04] bg-white/[0.02] opacity-50"
+                    "border-outline-variant/60 bg-surface opacity-55"
                 )}
               >
                 <div className="mt-0.5 shrink-0">
                   {done ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                    <CheckCircle2
+                      className="h-4 w-4 text-success"
+                      aria-hidden="true"
+                    />
                   ) : current ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-cyan-400" />
+                    <Loader2
+                      className="h-4 w-4 animate-spin text-primary"
+                      aria-hidden="true"
+                    />
                   ) : (
-                    <span className="block h-4 w-4 rounded-full border border-slate-600" />
+                    <span
+                      className="block h-4 w-4 rounded-full border border-outline-variant"
+                      aria-hidden="true"
+                    />
                   )}
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-slate-100">
+                  <p className="font-label text-label-md text-on-surface">
                     {stage.title}
                   </p>
-                  <p className="text-xs text-slate-400">{stage.detail}</p>
+                  <p className="mt-0.5 font-body text-body-sm text-on-surface-variant">
+                    {stage.detail}
+                  </p>
                 </div>
               </div>
             );
