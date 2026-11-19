@@ -1,0 +1,56 @@
+{
+  "id": "tsa_prepared_presentation_v1",
+  "name": "TSA Prepared Presentation (Phase 2 Preview)",
+  "version": "1.0",
+  "enabled": false,
+  "description": "Evaluates speeches based on official Technology Student Association (TSA) Prepared Presentation guidelines.",
+  "target_min_sec": 180,
+  "target_max_sec": 300,
+  "tiers": {
+    "Exemplary": "85-100",
+    "Adequate": "65-84",
+    "Developing": "0-64"
+  },
+  "criteria": [
+    {
+      "id": "introduction",
+      "name": "Introduction",
+      "weight": 0.15,
+      "description": "Engages the audience effectively, clearly states the topic, and provides a compelling preview of main points.",
+      "exemplary_anchor": "Captivating hook, crystal-clear thesis statement, and seamless transition into the body of the speech.",
+      "developing_anchor": "Weak or missing hook, unclear purpose, or disorganized opening that fails to capture interest."
+    },
+    {
+      "id": "body_content",
+      "name": "Body Content & Argumentation",
+      "weight": 0.20,
+      "description": "Presents well-organized, supported ideas with logical progression and strong evidence.",
+      "exemplary_anchor": "Rigorous logical structure, persuasive supporting evidence, and seamless transitions between key arguments.",
+      "developing_anchor": "Superficial points, lack of supporting evidence, or disorganized rambling without clear progression."
+    },
+    {
+      "id": "conclusion",
+      "name": "Conclusion",
+      "weight": 0.15,
+      "description": "Summarizes main points effectively and delivers a memorable closing statement.",
+      "exemplary_anchor": "Strong synthesis of core takeaways and a resonant, memorable concluding thought.",
+      "developing_anchor": "Abrupt ending, missing summary of key points, or weak closing statement."
+    },
+    {
+      "id": "voice_delivery",
+      "name": "Voice & Delivery",
+      "weight": 0.35,
+      "description": "Demonstrates excellent vocal projection, clarity, professional poise, and engaging expression.",
+      "exemplary_anchor": "Professional presence with powerful voice projection, articulate pronunciation, and engaging non-verbal poise.",
+      "developing_anchor": "Distracting mannerisms, poor projection, mumbled articulation, or lack of professional composure."
+    },
+    {
+      "id": "time_management",
+      "name": "Time Management",
+      "weight": 0.15,
+      "description": "Adheres strictly to the required time limit (3 to 5 minutes).",
+      "exemplary_anchor": "Pefectly paced presentation finishing comfortably within the 3 to 5-minute window.",
+      "developing_anchor": "Significant time violation (significantly under 3 minutes or exceeding 5 minutes)."
+    }
+  ]
+}

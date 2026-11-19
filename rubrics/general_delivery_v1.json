@@ -1,0 +1,56 @@
+{
+  "id": "general_delivery_v1",
+  "name": "General Presentation Delivery",
+  "version": "1.0",
+  "enabled": true,
+  "description": "Evaluates vocal clarity, fluency & hiccup control, pacing & pausing, vocal variety, and composure.",
+  "target_min_sec": null,
+  "target_max_sec": null,
+  "tiers": {
+    "Exemplary": "85-100",
+    "Adequate": "65-84",
+    "Developing": "0-64"
+  },
+  "criteria": [
+    {
+      "id": "vocal_clarity",
+      "name": "Vocal Clarity & Projection",
+      "weight": 0.20,
+      "description": "Evaluates articulation, breath support, and consistent projection across the presentation.",
+      "exemplary_anchor": "Consistently clear articulation, strong breath support, and dynamic projection that fills the space effortlessly.",
+      "developing_anchor": "Frequent mumbling, dropped endings, poor breath support, or weak projection that makes comprehension difficult."
+    },
+    {
+      "id": "fluency_control",
+      "name": "Fluency & Hiccup Control",
+      "weight": 0.25,
+      "description": "Measures verbal fluidity and minimization of fillers, false starts, and hesitation hiccups.",
+      "exemplary_anchor": "Seamless speech with negligible fillers (um, ah, like) and exceptionally smooth transitions between thoughts.",
+      "developing_anchor": "Heavy reliance on verbal fillers, frequent false starts, repetitive loops, and noticeable hesitation hiccups."
+    },
+    {
+      "id": "pacing_pausing",
+      "name": "Pacing & Strategic Pausing",
+      "weight": 0.20,
+      "description": "Assesses speech rate appropriateness and the deliberate use of pauses for emphasis.",
+      "exemplary_anchor": "Well-calibrated speaking rate with purposeful, dramatic pauses that enhance audience comprehension and dramatic impact.",
+      "developing_anchor": "Rushed cadence without breathing room, or excessively slow, choppy pacing that loses audience attention."
+    },
+    {
+      "id": "vocal_variety",
+      "name": "Vocal Variety & Engagement",
+      "weight": 0.20,
+      "description": "Evaluates modulation of pitch, tone, and inflection to maintain audience engagement.",
+      "exemplary_anchor": "Expressive modulation of pitch and tone that vividly communicates emotion, enthusiasm, and key points.",
+      "developing_anchor": "Monotone delivery lacking inflection, emotion, or dynamic contrast, leading to listener fatigue."
+    },
+    {
+      "id": "structure_composure",
+      "name": "Structure & Composure",
+      "weight": 0.15,
+      "description": "Measures organizational clarity and overall poise under delivery pressure.",
+      "exemplary_anchor": "Immaculate logical structure with unshakable composure, confidence, and polished professional presence.",
+      "developing_anchor": "Disjointed presentation flow with visible nervousness, nervous fidgeting, or flustered composure."
+    }
+  ]
+}
