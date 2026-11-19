@@ -16,7 +16,7 @@ services:
       - key: GEMINI_MODEL
         value: gemini-2.5-flash
       - key: CORS_ORIGINS
-        value: http://localhost:3000
+        value: https://tsa-present.vercel.app,http://localhost:3000
       - key: MAX_AUDIO_MB
         value: "25"
       - key: MAX_DURATION_SEC

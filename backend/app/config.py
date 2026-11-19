@@ -29,8 +29,12 @@ class Settings(BaseSettings):
 
     @property
     def cors_origin_list(self) -> list[str]:
-        """Return parsed CORS origin strings."""
-        origins = [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        """Return normalized CORS origin strings without trailing slashes."""
+        origins = [
+            origin.strip().rstrip("/")
+            for origin in self.cors_origins.split(",")
+            if origin.strip().rstrip("/")
+        ]
         return origins or ["http://localhost:3000"]
 
     @property
