@@ -27,7 +27,7 @@ async function parseErrorMessage(res: Response): Promise<string> {
 export async function fetchHealth(
   signal?: AbortSignal
 ): Promise<HealthResponse> {
-  const res = await fetch(`${API_BASE_URL}/health`, {
+  const res = await fetch(`${API_BASE_URL}/api/v1/status`, {
     method: "GET",
     cache: "no-store",
     signal,

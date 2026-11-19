@@ -51,6 +51,7 @@ def create_app() -> FastAPI:
     )
 
     @application.get("/health", response_model=HealthResponse)
+    @application.get("/api/v1/status", response_model=HealthResponse)
     async def health_check() -> HealthResponse:
         cfg = get_settings()
         return HealthResponse(
