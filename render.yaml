@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: tsa-present-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DEEPGRAM_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: DEEPGRAM_MODEL
+        value: nova-2
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: CORS_ORIGINS
+        value: http://localhost:3000
+      - key: MAX_AUDIO_MB
+        value: "25"
+      - key: MAX_DURATION_SEC
+        value: "600"

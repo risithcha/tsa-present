@@ -97,18 +97,17 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## Deployment Instructions
+## Deployment Instructions ($0 Free Tier, No Credit Card Required)
 
-### Frontend (Vercel)
-1. Push your repository to GitHub.
-2. Set **Root Directory** to `frontend` in Vercel project settings.
-3. Configure environment variables:
-   - `NEXT_PUBLIC_API_URL=https://<your-space>.hf.space`
+### 1. Backend (Render Free Tier — Docker Blueprint)
+1. Go to [Render Dashboard](https://dashboard.render.com/) and click **New + → Blueprint**.
+2. Connect your GitHub repo (`risithcha/tsa-present`) — Render automatically reads `render.yaml` and builds the root `Dockerfile` (pure-NumPy YIN prosody keeps steady RAM around ~135 MB, comfortably inside Render's free 512 MB tier!).
+3. Enter your `DEEPGRAM_API_KEY` and `GEMINI_API_KEY` when prompted, then click **Apply**.
+4. Copy your live Render URL (e.g., `https://tsa-present-api.onrender.com`) and verify `/health`.
 
-### Backend (Hugging Face Spaces - Docker SDK)
-1. Create a new Space on Hugging Face selecting **Docker** as the SDK.
-2. The Hugging Face Space Docker SDK automatically picks up the root `Dockerfile` in the repository root.
-3. Set your secret environment variables in the Space's Settings -> Secrets and Variables:
-   - `CORS_ORIGINS=https://your-app.vercel.app` (or your custom Vercel frontend URL)
-   - `DEEPGRAM_API_KEY=your_deepgram_api_key`
-   - `GEMINI_API_KEY=your_google_ai_studio_key`
+### 2. Frontend (Vercel Free Hobby Tier)
+1. Go to [vercel.com/new](https://vercel.com/new) and import `risithcha/tsa-present`.
+2. Set **Root Directory** to `frontend`.
+3. Add environment variable:
+   - `NEXT_PUBLIC_API_URL=https://tsa-present-api.onrender.com` *(your exact Render URL, no trailing slash)*
+4. Deploy, then update `CORS_ORIGINS=https://<your-app>.vercel.app,http://localhost:3000` in Render's **Environment** tab.
